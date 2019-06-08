@@ -43,10 +43,15 @@ __all__ = ['sgd', 'train_and_predict_rnn', 'to_onehot','grad_clipping','predict_
 
 def grad_clipping(params, theta, device):
     """Clip the gradient."""
-    norm = torch.Tensor([0], device=device)
+    # print(device)
+    norm = torch.tensor([[0]], dtype=torch.float32, device=device).reshape((1,))
+    
     for param in params:
+        print(param.grad)
         norm += (param.grad ** 2).sum()
+    # print(norm)
     norm = norm.sqrt()
+    # print(norm.shape)
     if norm > theta:
         for param in params:
             param.grad[:] *= theta / norm
@@ -126,6 +131,8 @@ def train_and_predict_rnn(rnn, get_params, init_rnn_state, num_hiddens,
         l_sum, n = 0.0, 0
         data_iter = data_iter_fn(corpus_indices, batch_size, num_steps, device)
         for X, Y in data_iter:
+            # X = X.to(device)  # missing line from original code
+            # Y = Y.to(device)  # missing line from original code
             # print(X, Y)
             if is_random_iter:
                 # If random sampling is used, the hidden state is initialized
@@ -142,8 +149,8 @@ def train_and_predict_rnn(rnn, get_params, init_rnn_state, num_hiddens,
                 # print(state)
             # print(state.requires_grad,'kakakaak')
             # print(X.type())
-            inputs = to_onehot(X, len(vocab))
-            
+            inputs = to_onehot(X, len(vocab), device)
+            # print(inputs[0].device)
             # outputs is num_steps terms of shape (batch_size, len(vocab))
             (outputs, state) = rnn(inputs, state, params)
             
@@ -164,7 +171,8 @@ def train_and_predict_rnn(rnn, get_params, init_rnn_state, num_hiddens,
             # print(l)
             # print(l,'assss')
             l.backward()
-            grad_clipping(params, clipping_theta, device)  # Clip the gradient
+            # grad_clipping(params, clipping_theta, device)  # Clip the gradient
+            nn.utils.clip_grad_norm(params, clipping_theta)
             # params = 
             # print(params,'hahhaah')
             sgd(params, lr, 1)
@@ -336,9 +344,10 @@ def train_and_predict_rnn(rnn, get_params, init_rnn_state, num_hiddens,
 #     plt.xlabel('epoch')
 #     plt.ylabel('loss')
 
-def to_onehot(X, size):
+def to_onehot(X, size, device):
     def one_hot(x, class_count):
-        return torch.eye(class_count)[x,:]
+
+        return torch.eye(class_count)[x,:].to(device)
     if 1 in list(X.shape):
         return (one_hot(X, size))
     return [one_hot(x,size) for x in X.t()]
@@ -352,7 +361,7 @@ def predict_rnn(prefix, num_chars, rnn, params, init_rnn_state,
         # The output of the previous time step is taken as the input of the
         # current time step
         # print()
-        X = to_onehot(torch.tensor([output[-1]], device=device), len(vocab))
+        X = to_onehot(torch.tensor([output[-1]], device=device), len(vocab), device)
         # print(state)
         # Calculate the output and update the hidden state
         (Y, state) = rnn(X, state, params)
